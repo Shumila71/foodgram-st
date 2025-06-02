@@ -1,0 +1,23 @@
+[
+    {
+        "email": "vivanov@yandex.ru",
+        "username": "vasya.ivanov",
+        "first_name": "Вася",
+        "last_name": "Иванов",
+        "password": "Qwerty123!"
+    },
+    {
+        "email": "petrov@yandex.ru",
+        "username": "petya.petrov",
+        "first_name": "Петя",
+        "last_name": "Петров",
+        "password": "Asdfgh123!"
+    },
+    {
+        "email": "sidorov@yandex.ru",
+        "username": "sidor.sidorov",
+        "first_name": "Сидор",
+        "last_name": "Сидоров",
+        "password": "Zxcvbn123!"
+    }
+] 

@@ -1,0 +1,65 @@
+[
+    {
+        "author": {
+            "email": "vivanov@yandex.ru",
+            "username": "vasya.ivanov",
+            "first_name": "Вася",
+            "last_name": "Иванов"
+        },
+        "ingredients": [
+            {
+                "id": 2199,
+                "amount": 500
+            },
+            {
+                "id": 1673,
+                "amount": 200
+            }
+        ],
+        "name": "Борщ классический",
+        "text": "Классический борщ со свежими овощами. Подается со сметаной и черным хлебом.",
+        "cooking_time": 120
+    },
+    {
+        "author": {
+            "email": "petrov@yandex.ru",
+            "username": "petya.petrov",
+            "first_name": "Петя",
+            "last_name": "Петров"
+        },
+        "ingredients": [
+            {
+                "id": 1789,
+                "amount": 300
+            },
+            {
+                "id": 1542,
+                "amount": 100
+            }
+        ],
+        "name": "Салат Цезарь",
+        "text": "Классический салат Цезарь с куриным филе, хрустящими сухариками и соусом.",
+        "cooking_time": 30
+    },
+    {
+        "author": {
+            "email": "sidorov@yandex.ru",
+            "username": "sidor.sidorov",
+            "first_name": "Сидор",
+            "last_name": "Сидоров"
+        },
+        "ingredients": [
+            {
+                "id": 1567,
+                "amount": 200
+            },
+            {
+                "id": 1432,
+                "amount": 50
+            }
+        ],
+        "name": "Паста Карбонара",
+        "text": "Итальянская паста с соусом из яиц, сыра пекорино романо и черного перца.",
+        "cooking_time": 25
+    }
+] 
