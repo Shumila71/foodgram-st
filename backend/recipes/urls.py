@@ -1,10 +1,9 @@
-from django.urls import include, path
-from rest_framework.routers import DefaultRouter
+from django.urls import path
+
+from .views import recipe_short_link
 
 app_name = 'recipes'
 
-router = DefaultRouter()
-
 urlpatterns = [
-    path('', include(router.urls)),
+    path('s/<int:recipe_id>/', recipe_short_link, name='short_link'),
 ]
