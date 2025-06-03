@@ -141,4 +141,4 @@ dmypy.json
 static/
 media/
 
-backend/recipes/management/commands/clear_db.py
+*/clear_db.py
