@@ -9,4 +9,4 @@ def recipe_short_link(request, recipe_id):
     Перенаправляет пользователя на полную страницу рецепта.
     """
     recipe = get_object_or_404(Recipe, id=recipe_id)
-    return redirect('recipe_detail', recipe_id=recipe.id)
+    return redirect(f'/recipes/{recipe.id}')

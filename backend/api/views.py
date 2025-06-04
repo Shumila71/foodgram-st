@@ -12,7 +12,6 @@ from rest_framework.permissions import (
 )
 from rest_framework.response import Response
 from djoser.views import UserViewSet
-from django.urls import reverse
 from io import BytesIO
 
 from .permissions import IsAuthorOrReadOnly
@@ -254,14 +253,14 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     @action(
         detail=True,
-        methods=['get'],
-        url_path='get-link'
+        methods=("get",),
+        url_path="get-link",
+        url_name="get-link",
     )
     def get_link(self, request, pk=None):
         """
-        API endpoint для получения короткой ссылки по ID рецепта.
-        Вычисляет URL по имени маршрута и ключу рецепта.
+        Получает короткую ссылку на рецепт
         """
-        short_url = reverse('recipes:short_link', kwargs={'recipe_id': pk})
-        short_link = request.build_absolute_uri(short_url)
-        return Response({'short-link': short_link})
+        recipe = get_object_or_404(Recipe, pk=pk)
+        short_link = f"{request.get_host()}/s/{recipe.id}/"
+        return Response({"short-link": short_link}, status=status.HTTP_200_OK)

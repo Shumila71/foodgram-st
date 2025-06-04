@@ -85,6 +85,15 @@ class FoodgramUserAdmin(UserAdmin):
     search_fields = ('username', 'email', 'first_name', 'last_name')
     readonly_fields = ('get_avatar_display',)
 
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'username',
+                       'first_name', 'last_name',
+                       'password1', 'password2'),
+        }),
+    )
+
     def get_queryset(self, request):
         """Оптимизированный queryset с подсчетом связанных объектов."""
         return super().get_queryset(request).annotate(
@@ -102,8 +111,8 @@ class FoodgramUserAdmin(UserAdmin):
     def get_avatar_display(self, obj):
         """Возвращает HTML-разметку для отображения аватара."""
         if obj.avatar:
-            return f'<img src="{obj.avatar.url}" width="50" height="50" '
-            'style="border-radius: 50%; object-fit: cover;" />'
+            return f'<img src="{obj.avatar.url}" width="50"'
+            'height="50" style="border-radius: 50%; object-fit: cover;" />'
         return '<span style="color: #999;">Нет аватара</span>'
     get_avatar_display.short_description = 'Аватар'
 
