@@ -121,7 +121,7 @@ class RecipeAdmin(admin.ModelAdmin):
 
     @display(description='В избранном')
     def favorites_count(self, recipe):
-        return recipe.favorites.count()
+        return recipe.favorite.count()
 
     @mark_safe
     @display(description='Ингредиенты')
@@ -150,7 +150,7 @@ class RecipeAdmin(admin.ModelAdmin):
             'author'
         ).prefetch_related(
             'recipe_ingredients__ingredient',
-            'favorites'
+            'favorite'
         )
         return queryset
 

@@ -22,17 +22,17 @@ class RecipeFilter(FilterSet):
     def filter_is_favorited(self, recipes, name, value):
         user = self.request.user
         if value and not user.is_anonymous:
-            return recipes.filter(favorites__user=user)
+            return recipes.filter(favorite__user=user)
         elif not value and not user.is_anonymous:
-            return recipes.exclude(favorites__user=user)
+            return recipes.exclude(favorite__user=user)
         return recipes
 
     def filter_is_in_shopping_cart(self, recipes, name, value):
         user = self.request.user
         if value and not user.is_anonymous:
-            return recipes.filter(shopping_cart__user=user)
+            return recipes.filter(shoppingcart__user=user)
         elif not value and not user.is_anonymous:
-            return recipes.exclude(shopping_cart__user=user)
+            return recipes.exclude(shoppingcart__user=user)
         return recipes
 
     class Meta:

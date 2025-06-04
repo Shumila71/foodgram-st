@@ -5,11 +5,9 @@ from django.db import transaction
 from drf_extra_fields.fields import Base64ImageField
 
 from recipes.models import (
-    Favorite,
     Ingredient,
     Recipe,
-    RecipeIngredient,
-    ShoppingCart
+    RecipeIngredient
 )
 from users.models import Follow
 
@@ -86,15 +84,15 @@ class RecipeSerializer(serializers.ModelSerializer):
     def get_is_favorited(self, recipe):
         user = self.context.get('request').user
         return (
-            not user.is_anonymous and Favorite.objects.filter(
-                user=user, recipe=recipe).exists()
+            not user.is_anonymous and recipe.favorite.filter(
+                user=user).exists()
         )
 
     def get_is_in_shopping_cart(self, recipe):
         user = self.context.get('request').user
         return (
-            not user.is_anonymous and ShoppingCart.objects.filter(
-                user=user, recipe=recipe).exists()
+            not user.is_anonymous and recipe.shoppingcart.filter(
+                user=user).exists()
         )
 
 
@@ -111,7 +109,6 @@ class RecipeIngredientCreateSerializer(serializers.ModelSerializer):
 class RecipeWriteSerializer(serializers.ModelSerializer):
     ingredients = RecipeIngredientCreateSerializer(
         many=True,
-        source='recipe_ingredients',
         required=True
     )
     image = Base64ImageField(required=True)
@@ -189,7 +186,7 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        ingredients = validated_data.pop('recipe_ingredients')
+        ingredients = validated_data.pop('ingredients')
         validated_data['author'] = self.context['request'].user
         recipe = super().create(validated_data)
         self._create_ingredients(recipe, ingredients)
@@ -198,7 +195,7 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         instance.recipe_ingredients.all().delete()
-        ingredients = validated_data.pop('recipe_ingredients')
+        ingredients = validated_data.pop('ingredients')
         self._create_ingredients(instance, ingredients)
         return super().update(instance, validated_data)
 

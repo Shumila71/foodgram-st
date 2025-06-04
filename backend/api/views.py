@@ -135,7 +135,7 @@ class FoodgramUserViewSet(UserViewSet):
         permission_classes=[IsAuthenticated]
     )
     def subscriptions(self, request):
-        users = User.objects.filter(subscribers__user=request.user)
+        users = User.objects.filter(author_subscriptions__user=request.user)
         pages = self.paginate_queryset(users)
         serializer = UserWithRecipesSerializer(
             pages,
@@ -176,8 +176,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
     )
     def favorite(self, request, pk):
         if request.method == 'POST':
-            return self._add_to(Favorite, request.user, pk, 'избранное')
-        return self._remove_from(Favorite, request.user, pk, 'избранном')
+            return self._add_to(Favorite, request.user, pk)
+        return self._remove_from(Favorite, request.user, pk)
 
     @action(
         detail=True,
@@ -186,10 +186,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
     )
     def shopping_cart(self, request, pk):
         if request.method == 'POST':
-            return self._add_to(
-                ShoppingCart, request.user, pk, 'список покупок')
-        return self._remove_from(
-            ShoppingCart, request.user, pk, 'списке покупок')
+            return self._add_to(ShoppingCart, request.user, pk)
+        return self._remove_from(ShoppingCart, request.user, pk)
 
     def _add_to(self, model, user, pk):
         recipe = get_object_or_404(Recipe, id=pk)
@@ -217,14 +215,14 @@ class RecipeViewSet(viewsets.ModelViewSet):
         user = request.user
 
         ingredients = RecipeIngredient.objects.filter(
-            recipe__shopping_cart__user=user
+            recipe__shoppingcart__user=user
         ).values(
             'ingredient__name',
             'ingredient__measurement_unit'
         ).annotate(amount=Sum('amount')).order_by('ingredient__name')
 
         shopping_cart_recipes = Recipe.objects.filter(
-            shopping_cart__user=user
+            shoppingcart__user=user
         ).select_related('author')
 
         current_date = datetime.now().strftime('%d.%m.%Y')
@@ -264,6 +262,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """
         if not Recipe.objects.filter(pk=pk).exists():
             raise Http404
-        short_url = reverse('recipe_short_link', kwargs={'recipe_id': pk})
+        short_url = reverse('recipes:short_link', kwargs={'recipe_id': pk})
         short_link = request.build_absolute_uri(short_url)
         return Response({"short-link": short_link}, status=status.HTTP_200_OK)
