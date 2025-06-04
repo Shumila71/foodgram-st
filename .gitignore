@@ -142,4 +142,7 @@ static/
 media/
 
 /backend/recipes/management/commands/clear_db.py
+/backend/recipes/management/commands/load_data.py
 /backend/start_server.py
+/backend/data/recipes.json
+/backend/data/users.json

@@ -16,19 +16,17 @@ class Command(BaseCommand):
             with open(json_file, encoding='utf-8') as file:
                 ingredients_data = json.load(file)
 
-                existing_ingredients = set(
-                    Ingredient.objects.values_list('name', 'measurement_unit')
-                )
-
-                new_ingredients = []
-                for ingredient in ingredients_data:
-                    ingredient_tuple = (
-                        ingredient['name'], ingredient['measurement_unit'])
-                    if ingredient_tuple not in existing_ingredients:
-                        new_ingredients.append(Ingredient(**ingredient))
+                existing_ingredients = set(Ingredient.objects.values_list(
+                    'name', 'measurement_unit'))
 
                 created_ingredients = Ingredient.objects.bulk_create(
-                    new_ingredients)
+                    [Ingredient(
+                        **ingredient) for ingredient in ingredients_data
+                        if (ingredient['name'],
+                            ingredient['measurement_unit'])
+                        not in existing_ingredients],
+                    ignore_conflicts=True
+                )
                 created_count = len(created_ingredients)
                 existing_count = len(ingredients_data) - created_count
 
@@ -43,6 +41,7 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(
                 self.style.ERROR(
-                    'Произошла ошибка'
-                    f'при загрузке файла {json_file}: {str(e)}')
+                    'Произошла ошибка '
+                    f'при загрузке файла {json_file}: {e}'
+                )
             )

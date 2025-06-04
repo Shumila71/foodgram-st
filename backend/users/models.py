@@ -10,9 +10,7 @@ class User(AbstractUser):
         unique=True,
         validators=[
             RegexValidator(
-                regex=r'^[\w.@+-]+$',
-                message='Ник может содержать только буквы,'
-                ' цифры и знаки @/./+/-/_'
+                regex=r'^[\w.@+-]+$'
             )
         ]
     )
@@ -79,7 +77,7 @@ class Follow(models.Model):
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='subscribers',
+        related_name='author_subscriptions',
         verbose_name='Автор'
     )
 

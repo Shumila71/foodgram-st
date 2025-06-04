@@ -1,8 +1,9 @@
 from datetime import datetime
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
-from django.http import FileResponse
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -12,14 +13,13 @@ from rest_framework.permissions import (
 )
 from rest_framework.response import Response
 from djoser.views import UserViewSet
-from io import BytesIO
 
 from .permissions import IsAuthorOrReadOnly
 from .filters import RecipeFilter
 from .pagination import FoodgramPageNumberPagination
 from .serializers import (
     FoodgramUserSerializer,
-    FollowListSerializer,
+    UserWithRecipesSerializer,
     IngredientSerializer,
     RecipeSerializer,
     RecipeWriteSerializer,
@@ -58,13 +58,13 @@ class FoodgramUserViewSet(UserViewSet):
 
     @action(
         detail=False,
-        methods=['post', 'put', 'delete'],
+        methods=['put', 'delete'],
         url_path='me/avatar',
         permission_classes=[IsAuthenticated]
     )
     def avatar(self, request):
         user = request.user
-        if request.method in ['POST', 'PUT']:
+        if request.method == 'PUT':
             if not request.data.get('avatar'):
                 return Response(
                     {'error': 'Файл аватара не предоставлен'},
@@ -96,36 +96,38 @@ class FoodgramUserViewSet(UserViewSet):
         permission_classes=[IsAuthenticated]
     )
     def subscribe(self, request, **kwargs):
-        author = get_object_or_404(User, id=kwargs.get('id'))
+        author_id = kwargs.get('id')
 
-        if request.method == 'POST':
-            if request.user == author:
-                return Response(
-                    {'errors': 'Нельзя подписаться на самого себя'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            follow, created = Follow.objects.get_or_create(
-                user=request.user, author=author
+        if request.method == 'DELETE':
+            follow = get_object_or_404(
+                Follow, user=request.user, author_id=author_id
             )
-            if not created:
-                return Response(
-                    {'errors': 'Вы уже подписаны на пользователя'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            follow.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
-            serializer = FollowListSerializer(
-                author,
-                context={'request': request}
-            )
+        author = get_object_or_404(User, id=author_id)
+        if request.user == author:
             return Response(
-                serializer.data, status=status.HTTP_201_CREATED)
+                {'errors': 'Нельзя подписаться на самого себя'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        follow = get_object_or_404(
-            Follow, user=request.user, author=author
+        follow, created = Follow.objects.get_or_create(
+            user=request.user, author=author
         )
-        follow.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        if not created:
+            return Response(
+                {'errors': f'Вы уже подписаны на пользователя'
+                 f'{author.username}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = UserWithRecipesSerializer(
+            author,
+            context={'request': request}
+        )
+        return Response(
+            serializer.data, status=status.HTTP_201_CREATED)
 
     @action(
         detail=False,
@@ -135,7 +137,7 @@ class FoodgramUserViewSet(UserViewSet):
     def subscriptions(self, request):
         users = User.objects.filter(subscribers__user=request.user)
         pages = self.paginate_queryset(users)
-        serializer = FollowListSerializer(
+        serializer = UserWithRecipesSerializer(
             pages,
             many=True,
             context={'request': request}
@@ -189,22 +191,21 @@ class RecipeViewSet(viewsets.ModelViewSet):
         return self._remove_from(
             ShoppingCart, request.user, pk, 'списке покупок')
 
-    def _add_to(self, model, user, pk, table_name):
+    def _add_to(self, model, user, pk):
         recipe = get_object_or_404(Recipe, id=pk)
         obj, created = model.objects.get_or_create(user=user, recipe=recipe)
         if not created:
             return Response(
-                {'error': f'Рецепт "{recipe.name}"'
-                 f'уже добавлен в {table_name}'},
+                {'error': f'Рецепт "{recipe.name}" '
+                 f'уже добавлен в {model._meta.verbose_name}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         serializer = RecipeShortSerializer(
             recipe, context={'request': self.request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    def _remove_from(self, model, user, pk, table_name):
-        recipe = get_object_or_404(Recipe, id=pk)
-        obj = get_object_or_404(model, user=user, recipe=recipe)
+    def _remove_from(self, model, user, pk):
+        obj = get_object_or_404(model, user=user, recipe_id=pk)
         obj.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -232,10 +233,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
             f'Список покупок от {current_date}',
             '',
             'ПРОДУКТЫ:',
-            *[f'{i+1}. {ingredient["ingredient__name"].capitalize()} - '
+            *[f'{i}. {ingredient["ingredient__name"].capitalize()} - '
               f'{ingredient["amount"]}'
               f' {ingredient["ingredient__measurement_unit"]}'
-              for i, ingredient in enumerate(ingredients)],
+              for i, ingredient in enumerate(ingredients, start=1)],
             '',
             'РЕЦЕПТЫ:',
             *[f'• "{recipe.name}" (автор: '
@@ -244,10 +245,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
         ])
 
         response = FileResponse(
-            BytesIO(shopping_list_content.encode('utf-8')),
+            shopping_list_content,
             as_attachment=True,
             filename='shopping_list.txt',
-            content_type='text/plain; charset=utf-8'
+            content_type='text/plain'
         )
         return response
 
@@ -261,6 +262,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """
         Получает короткую ссылку на рецепт
         """
-        recipe = get_object_or_404(Recipe, pk=pk)
-        short_link = f"{request.get_host()}/s/{recipe.id}/"
+        if not Recipe.objects.filter(pk=pk).exists():
+            raise Http404
+        short_url = reverse('recipe_short_link', kwargs={'recipe_id': pk})
+        short_link = request.build_absolute_uri(short_url)
         return Response({"short-link": short_link}, status=status.HTTP_200_OK)

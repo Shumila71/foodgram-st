@@ -2,7 +2,9 @@ from django.contrib import admin
 from django.contrib.admin import display
 from django.utils.safestring import mark_safe
 from django.db.models import Count
+from django.db.models import Min, Max
 
+from users.admin import BaseListFilter
 from .models import (
     Favorite,
     Ingredient,
@@ -25,51 +27,67 @@ class OptimizedQuerysetMixin:
 
 
 class CookingTimeFilter(admin.SimpleListFilter):
-    """Фильтр по времени готовки с умными подписями."""
+    """Фильтр по времени готовки с динамическими порогами."""
     title = 'время готовки'
     parameter_name = 'cooking_time_range'
 
+    def _get_time_thresholds(self):
+        """Возвращает пороги времени для фильтрации."""
+        time_stats = Recipe.objects.aggregate(
+            min_time=Min('cooking_time'),
+            max_time=Max('cooking_time')
+        )
+
+        min_time = time_stats['min_time']
+        max_time = time_stats['max_time']
+
+        if not min_time or not max_time:
+            return None, None, None
+
+        third = (max_time - min_time) // 3
+        threshold1 = min_time + third
+        threshold2 = min_time + 2 * third
+
+        return threshold1, threshold2, (min_time, max_time)
+
     def lookups(self, request, model_admin):
-        recipes_count = Recipe.objects.count()
-        if recipes_count == 0:
+        threshold1, threshold2, time_range = self._get_time_thresholds()
+
+        if not threshold1 or (time_range[1] - time_range[0]) < 10:
             return []
 
-        quick_count = Recipe.objects.filter(cooking_time__lte=30).count()
+        quick_count = Recipe.objects.filter(
+            cooking_time__lte=threshold1).count()
         medium_count = Recipe.objects.filter(
-            cooking_time__gt=30, cooking_time__lte=60).count()
-        long_count = Recipe.objects.filter(cooking_time__gt=60).count()
+            cooking_time__gt=threshold1, cooking_time__lte=threshold2).count()
+        long_count = Recipe.objects.filter(cooking_time__gt=threshold2).count()
 
         return [
-            ('quick', f'быстрее 30 мин ({quick_count})'),
-            ('medium', f'30-60 мин ({medium_count})'),
-            ('long', f'больше 60 мин ({long_count})'),
+            ('quick', f'до {threshold1} мин ({quick_count})'),
+            ('medium', f'{threshold1}-{threshold2} мин ({medium_count})'),
+            ('long', f'больше {threshold2} мин ({long_count})'),
         ]
 
-    def queryset(self, request, queryset):
+    def queryset(self, request, objects):
+        threshold1, threshold2, _ = self._get_time_thresholds()
+
+        if not threshold1:
+            return objects
+
         if self.value() == 'quick':
-            return queryset.filter(cooking_time__lte=30)
+            return objects.filter(cooking_time__lte=threshold1)
         if self.value() == 'medium':
-            return queryset.filter(cooking_time__gt=30, cooking_time__lte=60)
+            return objects.filter(
+                cooking_time__gt=threshold1, cooking_time__lte=threshold2)
         if self.value() == 'long':
-            return queryset.filter(cooking_time__gt=60)
+            return objects.filter(cooking_time__gt=threshold2)
 
 
-class HasRecipesFilter(admin.SimpleListFilter):
+class HasRecipesFilter(BaseListFilter):
     """Фильтр ингредиентов по наличию в рецептах."""
     title = 'есть в рецептах'
     parameter_name = 'has_recipes'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('yes', 'Да'),
-            ('no', 'Нет'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value() == 'yes':
-            return queryset.filter(recipe_ingredients__isnull=False).distinct()
-        if self.value() == 'no':
-            return queryset.filter(recipe_ingredients__isnull=True)
+    filter_field = 'recipe_ingredients'
 
 
 class RecipeIngredientInline(admin.TabularInline):
@@ -108,26 +126,13 @@ class RecipeAdmin(admin.ModelAdmin):
     @mark_safe
     @display(description='Ингредиенты')
     def get_ingredients_display(self, recipe):
-        """Возвращает HTML-разметку списка ингредиентов."""
-        ingredients = recipe.recipe_ingredients.select_related(
-            'ingredient')[:3]
-        if not ingredients:
-            return '<span style="color: #999;">Нет ингредиентов</span>'
+        ingredients = recipe.recipe_ingredients.select_related('ingredient')
 
-        ingredients_list = []
-        for recipe_ingredient in ingredients:
-            ingredients_list.append(
-                f'{recipe_ingredient.ingredient.name} '
-                f'({recipe_ingredient.amount}'
-                f'{recipe_ingredient.ingredient.measurement_unit})'
-            )
-
-        result = '<br>'.join(ingredients_list)
-        if recipe.recipe_ingredients.count() > 3:
-            remaining = recipe.recipe_ingredients.count() - 3
-            result += f'<br><i>...и еще {remaining}</i>'
-
-        return result
+        return '<br>'.join([
+            f'{ri.ingredient.name}'
+            f' ({ri.amount}{ri.ingredient.measurement_unit})'
+            for ri in ingredients
+        ])
 
     @mark_safe
     @display(description='Изображение')
@@ -164,9 +169,7 @@ class IngredientAdmin(admin.ModelAdmin):
     @display(description='В рецептах')
     def recipes_count(self, ingredient):
         """Возвращает количество рецептов с данным ингредиентом."""
-        return ingredient.recipes_count if hasattr(
-            ingredient, 'recipes_count'
-        ) else ingredient.recipe_ingredients.count()
+        return ingredient.recipes_count
 
     def get_queryset(self, request):
         """Оптимизированный queryset с подсчетом рецептов."""

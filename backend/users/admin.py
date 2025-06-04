@@ -6,58 +6,50 @@ from django.db.models import Count
 from .models import Follow, User
 
 
-class HasRecipesListFilter(admin.SimpleListFilter):
+class BaseListFilter(admin.SimpleListFilter):
+    """Базовый класс для фильтров по наличию связанных объектов."""
+
+    LOOKUPS = [
+        ('yes', 'Да'),
+        ('no', 'Нет'),
+    ]
+
+    filter_field = None
+
+    def lookups(self, request, model_admin):
+        return self.LOOKUPS
+
+    def queryset(self, request, objects):
+        if not self.filter_field:
+            return objects
+
+        if self.value() == 'yes':
+            return objects.filter(
+                **{f'{self.filter_field}__isnull': False}).distinct()
+        if self.value() == 'no':
+            return objects.filter(
+                **{f'{self.filter_field}__isnull': True})
+
+
+class HasRecipesListFilter(BaseListFilter):
     """Фильтр по наличию рецептов."""
     title = 'есть рецепты'
     parameter_name = 'has_recipes'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('yes', 'Да'),
-            ('no', 'Нет'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value() == 'yes':
-            return queryset.filter(recipes__isnull=False).distinct()
-        if self.value() == 'no':
-            return queryset.filter(recipes__isnull=True)
+    filter_field = 'recipes'
 
 
-class HasSubscriptionsListFilter(admin.SimpleListFilter):
+class HasSubscriptionsListFilter(BaseListFilter):
     """Фильтр по наличию подписок."""
     title = 'есть подписки'
     parameter_name = 'has_subscriptions'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('yes', 'Да'),
-            ('no', 'Нет'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value() == 'yes':
-            return queryset.filter(subscriptions__isnull=False).distinct()
-        if self.value() == 'no':
-            return queryset.filter(subscriptions__isnull=True)
+    filter_field = 'subscriptions'
 
 
-class HasFollowersListFilter(admin.SimpleListFilter):
+class HasFollowersListFilter(BaseListFilter):
     """Фильтр по наличию подписчиков."""
     title = 'есть подписчики'
     parameter_name = 'has_followers'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('yes', 'Да'),
-            ('no', 'Нет'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value() == 'yes':
-            return queryset.filter(subscribers__isnull=False).distinct()
-        if self.value() == 'no':
-            return queryset.filter(subscribers__isnull=True)
+    filter_field = 'author_subscriptions'
 
 
 @admin.register(User)
@@ -99,14 +91,15 @@ class FoodgramUserAdmin(UserAdmin):
         return super().get_queryset(request).annotate(
             recipes_count=Count('recipes', distinct=True),
             subscriptions_count=Count('subscriptions', distinct=True),
-            followers_count=Count('subscribers', distinct=True)
+            followers_count=Count('author_subscriptions', distinct=True)
         )
 
+    @admin.display(description='ФИО')
     def get_full_name(self, obj):
         """Возвращает полное имя пользователя."""
         return f"{obj.first_name} {obj.last_name}".strip()
-    get_full_name.short_description = 'ФИО'
 
+    @admin.display(description='Аватар')
     @mark_safe
     def get_avatar_display(self, obj):
         """Возвращает HTML-разметку для отображения аватара."""
@@ -116,23 +109,20 @@ class FoodgramUserAdmin(UserAdmin):
         return '<span style="color: #999;">Нет аватара</span>'
     get_avatar_display.short_description = 'Аватар'
 
+    @admin.display(description='Рецептов')
     def get_recipes_count(self, obj):
         """Возвращает количество рецептов пользователя."""
-        return obj.recipes_count if hasattr(
-            obj, 'recipes_count') else obj.recipes.count()
-    get_recipes_count.short_description = 'Рецептов'
+        return obj.recipes_count
 
+    @admin.display(description='Подписок')
     def get_subscriptions_count(self, obj):
         """Возвращает количество подписок пользователя."""
-        return obj.subscriptions_count if hasattr(
-            obj, 'subscriptions_count') else obj.subscriptions.count()
-    get_subscriptions_count.short_description = 'Подписок'
+        return obj.subscriptions_count
 
+    @admin.display(description='Подписчиков')
     def get_followers_count(self, obj):
         """Возвращает количество подписчиков пользователя."""
-        return obj.followers_count if hasattr(
-            obj, 'followers_count') else obj.subscribers.count()
-    get_followers_count.short_description = 'Подписчиков'
+        return obj.followers_count
 
 
 @admin.register(Follow)
@@ -154,12 +144,12 @@ class FollowAdmin(admin.ModelAdmin):
     )
     list_select_related = ('user', 'author')
 
+    @admin.display(description='Email подписчика')
     def get_user_email(self, obj):
         """Возвращает email подписчика."""
         return obj.user.email
-    get_user_email.short_description = 'Email подписчика'
 
+    @admin.display(description='Email автора')
     def get_author_email(self, obj):
         """Возвращает email автора."""
         return obj.author.email
-    get_author_email.short_description = 'Email автора'
