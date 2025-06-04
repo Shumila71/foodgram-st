@@ -12,8 +12,8 @@ from rest_framework.permissions import (
 )
 from rest_framework.response import Response
 from djoser.views import UserViewSet
-from io import StringIO
 from django.urls import reverse
+from io import BytesIO
 
 from .permissions import IsAuthorOrReadOnly
 from .filters import RecipeFilter
@@ -23,7 +23,8 @@ from .serializers import (
     FollowListSerializer,
     IngredientSerializer,
     RecipeSerializer,
-    RecipeWriteSerializer
+    RecipeWriteSerializer,
+    RecipeShortSerializer
 )
 from recipes.models import (
     Favorite,
@@ -42,6 +43,7 @@ class FoodgramUserViewSet(UserViewSet):
     serializer_class = FoodgramUserSerializer
     queryset = User.objects.all()
     pagination_class = FoodgramPageNumberPagination
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     @action(
         detail=False,
@@ -145,8 +147,14 @@ class FoodgramUserViewSet(UserViewSet):
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
-    search_fields = ('^name',)
     pagination_class = None
+
+    def get_queryset(self):
+        queryset = Ingredient.objects.all()
+        name = self.request.query_params.get('name')
+        if name:
+            queryset = queryset.filter(name__istartswith=name)
+        return queryset
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
@@ -191,7 +199,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
                  f'уже добавлен в {table_name}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        serializer = RecipeSerializer(recipe)
+        serializer = RecipeShortSerializer(
+            recipe, context={'request': self.request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def _remove_from(self, model, user, pk, table_name):
@@ -235,9 +244,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
               for recipe in shopping_cart_recipes],
         ])
 
-        file_buffer = StringIO(shopping_list_content)
         response = FileResponse(
-            file_buffer,
+            BytesIO(shopping_list_content.encode('utf-8')),
             as_attachment=True,
             filename='shopping_list.txt',
             content_type='text/plain; charset=utf-8'
@@ -247,7 +255,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=['get'],
-        permission_classes=[IsAuthenticated],
         url_path='get-link'
     )
     def get_link(self, request, pk=None):

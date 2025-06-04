@@ -152,7 +152,7 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         source='recipe_ingredients',
         required=True
     )
-    image = Base64ImageField()
+    image = Base64ImageField(required=True)
     cooking_time = serializers.IntegerField(min_value=1)
 
     class Meta:
@@ -191,18 +191,21 @@ class RecipeWriteSerializer(serializers.ModelSerializer):
         return value
 
     def validate_image(self, value):
-        if value:
-            if value.size > 2 * 1024 * 1024:
-                raise serializers.ValidationError(
-                    'Размер изображения не должен превышать 2MB'
-                )
+        if not value:
+            raise serializers.ValidationError(
+                'Изображение обязательно для рецепта.'
+            )
+        if value.size > 2 * 1024 * 1024:
+            raise serializers.ValidationError(
+                'Размер изображения не должен превышать 2MB'
+            )
 
-            allowed_extensions = ['jpg', 'jpeg', 'png']
-            ext = value.name.split('.')[-1].lower()
-            if ext not in allowed_extensions:
-                raise serializers.ValidationError(
-                    'Поддерживаются только форматы JPG и PNG'
-                )
+        allowed_extensions = ['jpg', 'jpeg', 'png']
+        ext = value.name.split('.')[-1].lower()
+        if ext not in allowed_extensions:
+            raise serializers.ValidationError(
+                'Поддерживаются только форматы JPG и PNG'
+            )
         return value
 
     def _create_ingredients(self, recipe, ingredients):
@@ -282,3 +285,12 @@ class RecipeShortSerializer(serializers.ModelSerializer):
         model = Recipe
         fields = ('id', 'name', 'image', 'cooking_time')
         read_only_fields = ('id', 'name', 'image', 'cooking_time')
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if instance.image and request:
+            data['image'] = request.build_absolute_uri(instance.image.url)
+        elif not instance.image:
+            data['image'] = ""
+        return data
